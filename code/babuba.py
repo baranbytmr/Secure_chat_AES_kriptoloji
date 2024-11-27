@@ -1,32 +1,33 @@
+import asyncio
+import websockets
 import socket
-import time
 
-CHAT_LOG_FILE = "chat_log.txt"
-SERVER_HOST = "127.0.0.1"
-SERVER_PORT = 5000
+BACKEND_HOST = "127.0.0.1"
+BACKEND_PORT = 5000
+FRONTEND_PORT = 8000
 
-def read_chat_log():
-    """Read the chat log and send to the server."""
-    with open(CHAT_LOG_FILE, 'r') as file:
-        return file.read()
+async def handle_websocket(websocket, path):
+    """Handle incoming WebSocket messages and forward to the backend server."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as backend_socket:
+        backend_socket.connect((BACKEND_HOST, BACKEND_PORT))
+        async for message in websocket:
+            print(f"Message from frontend: {message}")
+            
+            # Forward the message to the backend server
+            backend_socket.sendall(message.encode('utf-8'))
+            
+            # Receive the response from the backend
+            response = backend_socket.recv(1024).decode('utf-8')
+            print(f"Response from backend: {response}")
+            
+            # Send the response back to the frontend
+            await websocket.send(response)
 
-def send_to_server(message):
-    """Send the message to the server."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-        client_socket.connect((SERVER_HOST, SERVER_PORT))
-        client_socket.sendall(message.encode('utf-8'))
-        response = client_socket.recv(1024).decode('utf-8')
-        print(f"Server response: {response}")
+async def start_server():
+    """Start the WebSocket server."""
+    print(f"WebSocket server running on ws://127.0.0.1:{FRONTEND_PORT}")
+    async with websockets.serve(handle_websocket, "127.0.0.1", FRONTEND_PORT):
+        await asyncio.Future()  # Run forever
 
 if __name__ == '__main__':
-    while True:
-        try:
-            logs = read_chat_log()
-            send_to_server(logs)
-            time.sleep(10)  # Send logs every 10 seconds
-        except FileNotFoundError:
-            print(f"{CHAT_LOG_FILE} not found. Waiting...")
-            time.sleep(10)
-        except Exception as e:
-            print(f"Error: {e}")
-            break
+    asyncio.run(start_server())

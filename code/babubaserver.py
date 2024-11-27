@@ -1,21 +1,11 @@
-import socket
+import asyncio
+import websockets
+async def handler(websocket, path):
+    data = await websocket.recv()
+    reply = f"Data recieved as:{data}!"
+    await websocket.send(reply)
 
-HOST = "127.0.0.1"
-PORT = 5000
+start_server = websockets.serve(handler, "localhost", 8000)
 
-def start_server():
-    """Start the chat server."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-        server_socket.bind((HOST, PORT))
-        server_socket.listen()
-        print(f"Server listening on {HOST}:{PORT}")
-        while True:
-            conn, addr = server_socket.accept()
-            with conn:
-                print(f"Connection established with {addr}")
-                data = conn.recv(1024).decode('utf-8')
-                print(f"Received data:\n{data}")
-                conn.sendall(b"Log received successfully.")
-
-if __name__ == '__main__':
-    start_server()
+asyncio.get_event_loop().run_until_complete(start_server)
+asyncio.get_event_loop().run_forever()
