@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Application</title>
+    <link rel="stylesheet" href="../css/chat.css">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <!-- User Profile -->
+            <div class="user-profile">
+                <div class="profile-info">
+                    <img src="../assets/images/default-avatar.png" alt="Profile" class="avatar">
+                    <span id="username-display">Barcanito</span>
+                </div>
+                <button id="logoutBtn" class="logout-button">Logout</button>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="search-container">
+                <input type="text" id="searchContacts" placeholder="Search contacts...">
+            </div>
+
+            <!-- Contacts List -->
+            <div class="contacts-list" id="contactsList">
+                <!-- Contacts will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <!-- Chat Header -->
+            <div class="chat-header">
+                <div class="current-chat-info">
+                    <img src="../assets/images/default-avatar.png" alt="Contact" class="avatar" id="currentChatAvatar">
+                    <span id="currentChatName">Select a contact</span>
+                </div>
+            </div>
+
+            <!-- Messages Container -->
+            <div class="messages-container" id="chatMessages">
+                <!-- Messages will be populated by JavaScript -->
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-area">
+                <input type="text" id="messageInput" placeholder="Type a message...">
+                <button id="sendButton" class="send-button">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/chat.js"></script>
+</body>
+</html>
