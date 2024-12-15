@@ -5,30 +5,21 @@ from aes import AES
 from ctr import CTR
 import getpass
 import secrets
-import argparse
 import concurrent.futures
 import hmac
 import hashlib
-#from cryptography.fernet import Fernet
 
 blocksize = 16
-passwd = "1234567890"
+passwd = ""
 
 class ChatClient:
+    passwd = ""
     def __init__(self, username, host='127.0.0.1', port=5555):
         self.username = username
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect((host, port))
-        
-
-        # Generate encryption key
-        #self.fernet_key = Fernet.generate_key()
-        #self.cipher_suite = Fernet(self.fernet_key)
-
-        # Send key to server
-        passwd_bytes = passwd.encode("utf-8")  # Or another appropriate encoding
-
-        self.client.send(passwd_bytes)
+        passwd = getpass.getpass("Enter password: ")
+        self.client.send(passwd.encode())
         print("Connected to server and sent encryption key")
 
     def receive_messages(self):
