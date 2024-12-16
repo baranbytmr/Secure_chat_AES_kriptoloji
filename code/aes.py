@@ -60,34 +60,41 @@ class AES:
     def KeyExpansion(self, key, rounds):
         # Generating rcon by doubling rcon's previous value in GF(2^8)
         # Only need 10 total rcon values for all AES key lengths (rcon list uses 1-based indexing)
-        rcon = [np.zeros(4, dtype="uint8") for _ in range(11)]
+        rcon = [np.zeros(4, dtype=np.int16) for _ in range(11)]  # Change to int16
         rcon[1][0] = 1
         for i in range(2, 11):
-            rcon[i][0] = (rcon[i - 1][0] << 1) ^ (0x11B & -(rcon[i - 1][0] >> 7))
+            # Cast to int16, perform operation, then modulo 256 to stay within bounds
+            prev_val = int(rcon[i - 1][0])
+            new_val = ((prev_val << 1) ^ (0x11B & -(prev_val >> 7))) % 256
+            rcon[i][0] = new_val
 
         # N is the length of the key in 32-bit words (i.e. 4-byte words)
         N = self.key_len // 32
-        # R is the number of round keys needed: 11 round keys for AES-128, 13 keys for AES-192, and 15 keys for AES-256
+        # R is the number of round keys needed
         R = rounds + 1
 
-        # Expanded keys for R rounds in 32-bit words (i.e. 4-byte words)
-        keys = np.asarray([np.zeros(4, dtype="uint8") for _ in range(4 * R)])
+        # Expanded keys for R rounds in 32-bit words
+        keys = np.asarray([np.zeros(4, dtype=np.uint8) for _ in range(4 * R)])
 
         for i in range(4 * R):
             if i < N:
                 keys[i] = key[i]
             elif i % N == 0:
-                keys[i] = (
-                    keys[i - N] ^ self.S_box[np.roll(keys[i - 1], -1)] ^ rcon[i // N]
-                )
+                # Perform operations with explicit type casting and bounds checking
+                temp = np.roll(keys[i - 1].astype(np.int16), -1)
+                temp = self.S_box[temp].astype(np.int16)
+                temp = (temp ^ rcon[i // N].astype(np.int16) ^ keys[i - N].astype(np.int16)) % 256
+                keys[i] = temp.astype(np.uint8)
             elif (N > 6) and (i % N == 4):
-                keys[i] = keys[i - N] ^ self.S_box[keys[i - 1]]
+                temp = (self.S_box[keys[i - 1]].astype(np.int16) ^ keys[i - N].astype(np.int16)) % 256
+                keys[i] = temp.astype(np.uint8)
             else:
-                keys[i] = keys[i - N] ^ keys[i - 1]
+                temp = (keys[i - N].astype(np.int16) ^ keys[i - 1].astype(np.int16)) % 256
+                keys[i] = temp.astype(np.uint8)
 
         # Split the keys for each round
         keys = np.split(keys, R)
-        # Transpose arrays to match state shape (column-major order) and place in list of keys for each round
+        # Transpose arrays to match state shape (column-major order)
         keys = [np.transpose(i) for i in keys]
         return keys
 
@@ -104,36 +111,31 @@ class AES:
         ).reshape(4, 4)
 
     def MixColumns(self, state):
-        # Algorithm for multiplying in Galois Field GF(2^8)
-        # https://en.wikipedia.org/wiki/Rijndael_MixColumns
-        # From C implementation described in link above modified using the sources below
-
         def single_col(col):
-            # 'col' is a single column of the state
-            # 'col_mixed' is the mixed column to be returned
-            # 'b' does the multiplication by 2 in GF(2^8)
+            # Cast to int type for intermediate calculations to avoid overflow
+            col = col.astype(np.int16)  # Use int16 to handle intermediate values
 
-            # same as in KeyExplansion use of rcon elements
-            # reduction modulo the Rijndael polynomial x^8 + x^4 + x^3 + x + 1
-            # https://crypto.stackexchange.com/questions/2418/how-to-use-rcon-in-key-expansion-of-128-bit-advanced-encryption-standard
-
-            # Since col is a numpy array, we can perform elementwise operations directly
+            # Perform multiplication by 2 in GF(2^8)
             b = (col << 1) ^ (0x11B & -(col >> 7))
 
-            # multiplication by 3 is done by b ^ col since 3x=(2 xor 1)x = (2x) xor x
-            # https://crypto.stackexchange.com/questions/2402/how-to-solve-mixcolumns/2403#2403
+            # Calculate mixed column
             col_mixed = [
-                b[0] ^ col[3] ^ col[2] ^ b[1] ^ col[1],
-                b[1] ^ col[0] ^ col[3] ^ b[2] ^ col[2],
-                b[2] ^ col[1] ^ col[0] ^ b[3] ^ col[3],
-                b[3] ^ col[2] ^ col[1] ^ b[0] ^ col[0],
+                (b[0] ^ col[3] ^ col[2] ^ b[1] ^ col[1]) % 256,  # Add modulo operation
+                (b[1] ^ col[0] ^ col[3] ^ b[2] ^ col[2]) % 256,
+                (b[2] ^ col[1] ^ col[0] ^ b[3] ^ col[3]) % 256,
+                (b[3] ^ col[2] ^ col[1] ^ b[0] ^ col[0]) % 256,
             ]
-            return col_mixed
 
+            # Convert back to uint8
+            return np.array(col_mixed, dtype=np.uint8)
+
+        # Process each column
+        state = state.astype(np.int16)  # Convert state to int16 for calculations
         state[:, 0] = single_col(state[:, 0])
         state[:, 1] = single_col(state[:, 1])
         state[:, 2] = single_col(state[:, 2])
         state[:, 3] = single_col(state[:, 3])
+
         return state
 
     def encrypt(self, plaintext):

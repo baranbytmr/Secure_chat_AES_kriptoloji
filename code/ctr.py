@@ -4,19 +4,34 @@ class CTR:
         self.cipher = cipher
         self.nonce = nonce
 
-    def _xor(self, data_1, data_2):
-        return bytes([a ^ b for a, b in zip(data_1, data_2)])
-
     def encrypt(self, data_block, counter):
-        # len(nonce + counter) should be equal to the block size: 16 bytes (128 bits) for AES
-        # len(nonce) == 10 bytes by definition
-        # len(counter) == 6 bytes by definition
-        counter_bytes = counter.to_bytes(6, byteorder="big")
+        try:
+           # print(f"Debug - CTR encrypting block of size {len(data_block)}")
+            counter_bytes = counter.to_bytes(6, byteorder="big")
+            IV = self.nonce + counter_bytes
 
-        # Combine nonce and counter to make IV
-        IV = self.nonce + counter_bytes
-        ciphertext = self._xor(self.cipher.encrypt(IV), data_block)
-        return ciphertext
+            if len(data_block) != self.cipher.block_size:
+            #    print(f"Debug - Block size mismatch: got {len(data_block)}, expected {self.cipher.block_size}")
+                data_block = data_block.ljust(self.cipher.block_size, b'\0')
+
+            encrypted_block = self.cipher.encrypt(IV)
+            result = self._xor(encrypted_block, data_block)
+            #print(f"Debug - Block encryption complete, output size: {len(result)}")
+            return result
+        except Exception as e:
+           # print(f"Debug - CTR encryption error: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            return None
+
+    def _xor(self, data_1, data_2):
+        try:
+            # Ensure both inputs are the same length
+            min_len = min(len(data_1), len(data_2))
+            return bytes(a ^ b for a, b in zip(data_1[:min_len], data_2[:min_len]))
+        except Exception as e:
+            print(f"XOR error: {str(e)}")
+            return None
 
     def decrypt(self, cipher_block, counter):
         # Decryption is the same as encryption, but using cipher_block instead

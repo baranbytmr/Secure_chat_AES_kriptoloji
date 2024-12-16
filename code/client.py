@@ -15,7 +15,7 @@ blocksize = 16
 passwd = "1234567890"
 
 class ChatClient:
-    def __init__(self, username, host='127.0.0.1', port=5555):
+    def __init__(self, username, host='192.168.137.1', port=5555):
         self.username = username
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect((host, port))
@@ -46,10 +46,21 @@ class ChatClient:
     def send_message(self, message):
         try:
             full_message = f"{self.username}: {message}"
-            encrypted_message = encrypt_file(passwd, blocksize, full_message.encode())
-            self.client.send(encrypted_message)
+            message_bytes = full_message.encode()
+
+            #print(f"Debug - Message length: {len(message_bytes)} bytes")
+
+            encrypted_message = encrypt_file(passwd, blocksize, message_bytes)
+
+            if encrypted_message is not None:
+               #print(f"Debug - Encrypted message length: {len(encrypted_message)} bytes")
+                self.client.send(encrypted_message)
+            else:
+                print("Encryption failed - encrypted_message is None")
         except Exception as e:
             print(f"Error sending message: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
 
     def start(self):
         # Start receiving messages in a separate thread
@@ -117,37 +128,60 @@ def decrypt_file_chunks(passwd, block_size, file_in):
     file_out = parallel(mode.decrypt, chunks, b"", b"", counter)
     return file_out
 
+
 def encrypt_file(passwd, block_size, file_in):
-    salt = secrets.token_bytes(block_size)
+    try:
+        #print(f"Debug - Starting encryption of {len(file_in)} bytes")
 
-        # Create a random 10-byte nonce
-    nonce = secrets.token_bytes(10)
+        # Generate salt and nonce
+        salt = secrets.token_bytes(block_size)
+        nonce = secrets.token_bytes(10)
+        counter = 0
 
-        # Create the IV from the nonce and the initial 6-byte counter value of 0
-        # The IV will be stored as the second block of the ciphertext
-    counter = 0
+        #print(f"Debug - Salt length: {len(salt)}, Nonce length: {len(nonce)}")
 
-    IV = nonce + counter.to_bytes(6, "big")
+        IV = nonce + counter.to_bytes(6, "big")
+        #print(f"Debug - IV length: {len(IV)}")
 
-        # Start AES cipher
-    cipher = AES(password_str=passwd, salt=salt, key_len=256)
+        # Initialize cipher
+        cipher = AES(password_str=passwd, salt=salt, key_len=256)
+        mode = CTR(cipher, nonce)
 
-        # Start CTR mode
-    mode = CTR(cipher, nonce)
+        # Prepare chunks
+        chunks = []
+        for i in range(0, len(file_in), block_size):
+            chunk = file_in[i:i + block_size]
+            if len(chunk) < block_size:
+                padding = bytes([block_size - len(chunk)] * (block_size - len(chunk)))
+                chunk = chunk + padding
+            chunks.append(chunk)
 
-        # Preparing file_in chunks to be passed into multiprocessing
-    chunks = [
-            file_in[i : i + block_size] for i in range(0, len(file_in), block_size)
-        ]
+       # print(f"Debug - Number of chunks: {len(chunks)}")
 
-    file_out = parallel(mode.encrypt, chunks, salt, IV, counter)
+        try:
+            file_out = parallel(mode.encrypt, chunks, salt, IV, counter)
+            #print(f"Debug - Parallel encryption complete, output length: {len(file_out)}")
+        except Exception as e:
+           # print(f"Debug - Parallel encryption failed: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            return None
 
-        # Create authentication HMAC and store it as the last two blocks of the file
-    hmac_val = hmac.digest(key=cipher.hmac_key, msg=file_out, digest=hashlib.sha256)
+        # Generate and append HMAC
+        try:
+            hmac_val = hmac.digest(key=cipher.hmac_key, msg=file_out, digest=hashlib.sha256)
+          #  print(f"Debug - HMAC generated, length: {len(hmac_val)}")
+            file_out += hmac_val
+            return file_out
+        except Exception as e:
+           # print(f"Debug - HMAC generation failed: {str(e)}")
+            return None
 
-        # Append HMAC to the ciphertext
-    file_out += hmac_val
-    return file_out
+    except Exception as e:
+       # print(f"Debug - Encryption failed in main try block: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return None
 
 if __name__ == "__main__":
     username = input("Enter your username: ")
