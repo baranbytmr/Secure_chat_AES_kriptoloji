@@ -1,13 +1,8 @@
-# This is an implementation of AES in Python
-# Supports AES-128, AES-192, AES-256
-
-import numpy as np
+import numpy as np #1.19.3
 import hashlib
-
 
 class AES:
     def __init__(self, password_str, salt, key_len=256):
-        # AES block size is 16 bytes (128 bits)
         self.block_size = 16
         self.salt = salt
         self.key_len = key_len
@@ -38,7 +33,6 @@ class AES:
             0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16], np.uint8)
         # fmt: on
 
-        # Key expansion
         self.keys = self.KeyExpansion(key=self.key, rounds=self.rounds)
 
     def KeyGeneration(self, password, salt):
@@ -92,7 +86,6 @@ class AES:
                 temp = (keys[i - N].astype(np.int16) ^ keys[i - 1].astype(np.int16)) % 256
                 keys[i] = temp.astype(np.uint8)
 
-        # Split the keys for each round
         keys = np.split(keys, R)
         # Transpose arrays to match state shape (column-major order)
         keys = [np.transpose(i) for i in keys]
@@ -105,7 +98,6 @@ class AES:
         return self.S_box[state]
 
     def ShiftRows(self, state):
-        # Fastest solutions here: https://stackoverflow.com/questions/65177264/fastest-way-to-shift-rows-of-matrix-in-python
         return state.take(
             (0, 1, 2, 3, 5, 6, 7, 4, 10, 11, 8, 9, 15, 12, 13, 14)
         ).reshape(4, 4)
@@ -141,12 +133,8 @@ class AES:
     def encrypt(self, plaintext):
         assert len(plaintext) == self.block_size, "Plaintext must be 128 bits."
 
-        # Create the state
-        state = (
-            np.frombuffer(plaintext, dtype=np.uint8).reshape((4, 4), order="F").copy()
-        )
+        state = (np.frombuffer(plaintext, dtype=np.uint8).reshape((4, 4), order="F").copy())
 
-        # AddRoundKey for initial round
         state = self.AddRoundKey(state=state, key=self.keys[0])
 
         for i in range(1, self.rounds):
@@ -155,7 +143,6 @@ class AES:
             state = self.MixColumns(state=state)
             state = self.AddRoundKey(state=state, key=self.keys[i])
 
-        # Final round (doesn't MixColumns)
         state = self.SubBytes(state=state)
         state = self.ShiftRows(state=state)
         state = self.AddRoundKey(state=state, key=self.keys[self.rounds])
