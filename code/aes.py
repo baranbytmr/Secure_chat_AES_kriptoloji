@@ -1,4 +1,7 @@
-import numpy as np #1.19.3
+# This is an implementation of AES in Python
+# Supports AES-128, AES-192, AES-256
+
+import numpy as np
 import hashlib
 
 
@@ -89,8 +92,13 @@ class AES:
                 temp = (keys[i - N].astype(np.int16) ^ keys[i - 1].astype(np.int16)) % 256
                 keys[i] = temp.astype(np.uint8)
 
+        # Split the keys for each round
         keys = np.split(keys, R)
+<<<<<<< HEAD
         # Transpose arrays to match state shape (column-major order)
+=======
+        # Transpose arrays to match state shape (column-major order) and place in list of keys for each round
+>>>>>>> parent of cf52205 (pushla aq)
         keys = [np.transpose(i) for i in keys]
         return keys
 
@@ -101,11 +109,19 @@ class AES:
         return self.S_box[state]
 
     def ShiftRows(self, state):
+        # Fastest solutions here: https://stackoverflow.com/questions/65177264/fastest-way-to-shift-rows-of-matrix-in-python
         return state.take(
             (0, 1, 2, 3, 5, 6, 7, 4, 10, 11, 8, 9, 15, 12, 13, 14)
         ).reshape(4, 4)
 
     def MixColumns(self, state):
+<<<<<<< HEAD
+=======
+        # Algorithm for multiplying in Galois Field GF(2^8)
+        # https://en.wikipedia.org/wiki/Rijndael_MixColumns
+        # From C implementation described in link above modified using the sources below
+
+>>>>>>> parent of cf52205 (pushla aq)
         def single_col(col):
             # Cast to int type for intermediate calculations to avoid overflow
             col = col.astype(np.int16)  # Use int16 to handle intermediate values
@@ -115,11 +131,20 @@ class AES:
 
             # Calculate mixed column
             col_mixed = [
+<<<<<<< HEAD
                 (b[0] ^ col[3] ^ col[2] ^ b[1] ^ col[1]) % 256,  # Add modulo operation
                 (b[1] ^ col[0] ^ col[3] ^ b[2] ^ col[2]) % 256,
                 (b[2] ^ col[1] ^ col[0] ^ b[3] ^ col[3]) % 256,
                 (b[3] ^ col[2] ^ col[1] ^ b[0] ^ col[0]) % 256,
             ]
+=======
+                b[0] ^ col[3] ^ col[2] ^ b[1] ^ col[1],
+                b[1] ^ col[0] ^ col[3] ^ b[2] ^ col[2],
+                b[2] ^ col[1] ^ col[0] ^ b[3] ^ col[3],
+                b[3] ^ col[2] ^ col[1] ^ b[0] ^ col[0],
+            ]
+            return col_mixed
+>>>>>>> parent of cf52205 (pushla aq)
 
             # Convert back to uint8
             return np.array(col_mixed, dtype=np.uint8)
@@ -136,8 +161,12 @@ class AES:
     def encrypt(self, plaintext):
         assert len(plaintext) == self.block_size, "Plaintext must be 128 bits."
 
-        state = (np.frombuffer(plaintext, dtype=np.uint8).reshape((4, 4), order="F").copy())
+        # Create the state
+        state = (
+            np.frombuffer(plaintext, dtype=np.uint8).reshape((4, 4), order="F").copy()
+        )
 
+        # AddRoundKey for initial round
         state = self.AddRoundKey(state=state, key=self.keys[0])
 
         for i in range(1, self.rounds):
@@ -146,6 +175,7 @@ class AES:
             state = self.MixColumns(state=state)
             state = self.AddRoundKey(state=state, key=self.keys[i])
 
+        # Final round (doesn't MixColumns)
         state = self.SubBytes(state=state)
         state = self.ShiftRows(state=state)
         state = self.AddRoundKey(state=state, key=self.keys[self.rounds])
