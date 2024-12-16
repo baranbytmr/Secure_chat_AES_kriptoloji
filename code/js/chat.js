@@ -12,7 +12,36 @@ class ChatApp {
             loginTime: new Date(session.loginTime)
         };
 
-        this.contacts = [];
+this.contacts = [
+            {
+                id: 1,
+                name: 'John Doe',
+                avatar: '../assets/images/default-avatar1.png',
+                lastMessage: 'Hey, how are you?',
+                lastMessageTime: this.formatTimeShort(this.currentDateTime),
+                online: true,
+                messages: [
+                    { content: 'Hi Barcanito!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: 'How are you doing?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: "Hey John! I'm good, thanks!", type: 'sent', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: 'Hey, how are you?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) }
+                ]
+            },
+            {
+                id: 2,
+                name: 'Jane Smith',
+                avatar: '../assets/images/default-avatar2.png',
+                lastMessage: 'See you tomorrow!',
+                lastMessageTime: this.formatTimeShort(this.currentDateTime),
+                online: true,
+                messages: [
+                    { content: 'Did you finish the project?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: 'Yes, just submitted it', type: 'sent', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: 'Great work!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: 'See you tomorrow!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) }
+                ]
+            }
+        ];
         this.activeContact = null;
         this.ws = null;
 
@@ -250,7 +279,7 @@ class ChatApp {
 
         // Clear input
         this.messageInput.value = '';
-        
+
         // Reload contacts to update last message
         this.loadContacts();
     }
