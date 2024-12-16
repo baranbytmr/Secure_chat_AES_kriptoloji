@@ -13,7 +13,7 @@ blocksize = 16
 passwd = ""
 
 class ChatClient:
-    def __init__(self, username, host='192.168.137.1', port=5555):
+    def __init__(self, username, host='0.0.0.0', port=5555):
         self.username = username
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect((host, port))

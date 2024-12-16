@@ -1,8 +1,10 @@
 import numpy as np #1.19.3
 import hashlib
 
+
 class AES:
     def __init__(self, password_str, salt, key_len=256):
+        # AES block size is 16 bytes (128 bits)
         self.block_size = 16
         self.salt = salt
         self.key_len = key_len
@@ -33,6 +35,7 @@ class AES:
             0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16], np.uint8)
         # fmt: on
 
+        # Key expansion
         self.keys = self.KeyExpansion(key=self.key, rounds=self.rounds)
 
     def KeyGeneration(self, password, salt):
