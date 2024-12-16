@@ -4,52 +4,86 @@ class ChatApp {
             return;
         }
 
-        // Set current user and time
-        this.currentDateTime = new Date(); // Get current date/time
+        // Get user data from session
+        const session = JSON.parse(localStorage.getItem('currentSession'));
         this.currentUser = {
-            username: 'Barcanito',
+            username: session.username,
             avatar: '../assets/images/default-avatar.png',
-            loginTime: this.formatDateTime(this.currentDateTime)
+            loginTime: new Date(session.loginTime)
         };
 
-        // Initialize contacts
-        this.contacts = [
-            {
-                id: 1,
-                name: 'John Doe',
-                avatar: '../assets/images/default-avatar1.png',
-                lastMessage: 'Hey, how are you?',
-                lastMessageTime: this.formatTimeShort(this.currentDateTime),
-                online: true,
-                messages: [
-                    { content: 'Hi Barcanito!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: 'How are you doing?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: "Hey John! I'm good, thanks!", type: 'sent', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: 'Hey, how are you?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) }
-                ]
-            },
-            {
-                id: 2,
-                name: 'Jane Smith',
-                avatar: '../assets/images/default-avatar2.png',
-                lastMessage: 'See you tomorrow!',
-                lastMessageTime: this.formatTimeShort(this.currentDateTime),
-                online: true,
-                messages: [
-                    { content: 'Did you finish the project?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: 'Yes, just submitted it', type: 'sent', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: 'Great work!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: 'See you tomorrow!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) }
-                ]
-            }
-        ];
-
+        this.contacts = [];
         this.activeContact = null;
+        this.ws = null;
+
         this.initializeElements();
         this.initializeListeners();
         this.loadUserInfo();
-        this.loadContacts();
+        this.connectWebSocket();
         this.startTimeUpdate();
+    }
+
+    connectWebSocket() {
+        try {
+            this.ws = new WebSocket('ws://localhost:5555');
+
+            this.ws.onopen = () => {
+                console.log('Connected to chat server');
+                // Send authentication message
+                this.ws.send(JSON.stringify({
+                    type: 'auth',
+                    username: this.currentUser.username
+                }));
+            };
+
+            this.ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                this.handleWebSocketMessage(data);
+            };
+
+            this.ws.onclose = () => {
+                console.log('Disconnected from chat server');
+                // Attempt to reconnect after 5 seconds
+                setTimeout(() => this.connectWebSocket(), 5000);
+            };
+
+            this.ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        } catch (error) {
+            console.error('WebSocket connection error:', error);
+        }
+    }
+
+    handleWebSocketMessage(data) {
+        switch (data.type) {
+            case 'user_list':
+                this.updateContactsList(data.users);
+                break;
+            case 'message':
+                this.handleIncomingMessage(data);
+                break;
+            case 'user_joined':
+                this.addContact(data.username);
+                break;
+            case 'user_left':
+                this.removeContact(data.username);
+                break;
+        }
+    }
+
+    updateContactsList(users) {
+        this.contacts = users.filter(user => user !== this.currentUser.username)
+            .map(username => ({
+                id: username,
+                name: username,
+                avatar: '../assets/images/default-avatar.png',
+                online: true,
+                messages: [],
+                lastMessage: '',
+                lastMessageTime: ''
+            }));
+        this.loadContacts();
     }
 
     formatDateTime(date) {
@@ -73,7 +107,6 @@ class ChatApp {
     }
 
     startTimeUpdate() {
-        // Update date time display every second
         setInterval(() => {
             const now = new Date();
             if (this.dateTimeDisplay) {
@@ -193,6 +226,14 @@ class ChatApp {
         const now = new Date();
         const timestamp = this.formatTimeShort(now);
 
+        // Send message through WebSocket
+        this.ws.send(JSON.stringify({
+            type: 'message',
+            to: this.activeContact.name,
+            content: message,
+            timestamp: timestamp
+        }));
+
         // Add message to UI and storage
         this.addMessageToChat(message, 'sent', timestamp);
 
@@ -214,6 +255,26 @@ class ChatApp {
         this.loadContacts();
     }
 
+    handleIncomingMessage(data) {
+        const contact = this.contacts.find(c => c.name === data.from);
+        if (contact) {
+            contact.messages.push({
+                content: data.content,
+                type: 'received',
+                timestamp: data.timestamp
+            });
+
+            contact.lastMessage = data.content;
+            contact.lastMessageTime = data.timestamp;
+
+            if (this.activeContact && this.activeContact.id === contact.id) {
+                this.addMessageToChat(data.content, 'received', data.timestamp);
+            }
+
+            this.loadContacts();
+        }
+    }
+
     addMessageToChat(content, type, timestamp) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}`;
@@ -230,25 +291,50 @@ class ChatApp {
         messageDiv.appendChild(messageTime);
         this.chatMessages.appendChild(messageDiv);
 
-        // Scroll to bottom
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+    }
+
+    addContact(username) {
+        if (!this.contacts.find(c => c.name === username) && username !== this.currentUser.username) {
+            this.contacts.push({
+                id: username,
+                name: username,
+                avatar: '../assets/images/default-avatar.png',
+                online: true,
+                messages: [],
+                lastMessage: '',
+                lastMessageTime: ''
+            });
+            this.loadContacts();
+        }
+    }
+
+    removeContact(username) {
+        const index = this.contacts.findIndex(c => c.name === username);
+        if (index !== -1) {
+            if (this.activeContact && this.activeContact.name === username) {
+                this.activeContact = null;
+                this.currentChatName.textContent = 'Select a contact';
+                this.currentChatAvatar.src = '../assets/images/default-avatar.png';
+                this.chatMessages.innerHTML = '';
+            }
+            this.contacts.splice(index, 1);
+            this.loadContacts();
+        }
     }
 
     filterContacts() {
         const searchTerm = this.searchInput.value.toLowerCase();
         
-        // If search is empty, show all contacts
         if (!searchTerm) {
             this.loadContacts();
             return;
         }
 
-        // Filter contacts based on search term
         const filteredContacts = this.contacts.filter(contact => 
             contact.name.toLowerCase().includes(searchTerm)
         );
         
-        // Clear and rebuild contacts list
         this.contactsList.innerHTML = '';
         filteredContacts.forEach(contact => {
             const contactDiv = document.createElement('div');
@@ -288,6 +374,9 @@ class ChatApp {
     }
 
     logout() {
+        if (this.ws) {
+            this.ws.close();
+        }
         localStorage.removeItem('currentSession');
         window.location.href = 'login.html';
     }
