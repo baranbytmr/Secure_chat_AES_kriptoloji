@@ -4,15 +4,16 @@ class ChatApp {
             return;
         }
 
-        // Get user data from session
-        const session = JSON.parse(localStorage.getItem('currentSession'));
+        // Set current user and time
+        this.currentDateTime = new Date(); // Get current date/time
         this.currentUser = {
-            username: session.username,
+            username: 'Barcanito',
             avatar: '../assets/images/default-avatar.png',
-            loginTime: new Date(session.loginTime)
+            loginTime: this.formatDateTime(this.currentDateTime)
         };
 
-this.contacts = [
+        // Initialize contacts
+        this.contacts = [
             {
                 id: 1,
                 name: 'John Doe',
@@ -42,77 +43,17 @@ this.contacts = [
                 ]
             }
         ];
-        this.activeContact = null;
-        this.ws = null;
 
+        // Initialize empty contacts list
+        this.contacts = [];
+        this.ws = null;
+        this.connectToServer();
+
+        this.activeContact = null;
         this.initializeElements();
         this.initializeListeners();
         this.loadUserInfo();
-        this.connectWebSocket();
         this.startTimeUpdate();
-    }
-
-    connectWebSocket() {
-        try {
-            this.ws = new WebSocket('ws://localhost:5555');
-
-            this.ws.onopen = () => {
-                console.log('Connected to chat server');
-                // Send authentication message
-                this.ws.send(JSON.stringify({
-                    type: 'auth',
-                    username: this.currentUser.username
-                }));
-            };
-
-            this.ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                this.handleWebSocketMessage(data);
-            };
-
-            this.ws.onclose = () => {
-                console.log('Disconnected from chat server');
-                // Attempt to reconnect after 5 seconds
-                setTimeout(() => this.connectWebSocket(), 5000);
-            };
-
-            this.ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-            };
-        } catch (error) {
-            console.error('WebSocket connection error:', error);
-        }
-    }
-
-    handleWebSocketMessage(data) {
-        switch (data.type) {
-            case 'user_list':
-                this.updateContactsList(data.users);
-                break;
-            case 'message':
-                this.handleIncomingMessage(data);
-                break;
-            case 'user_joined':
-                this.addContact(data.username);
-                break;
-            case 'user_left':
-                this.removeContact(data.username);
-                break;
-        }
-    }
-
-    updateContactsList(users) {
-        this.contacts = users.filter(user => user !== this.currentUser.username)
-            .map(username => ({
-                id: username,
-                name: username,
-                avatar: '../assets/images/default-avatar.png',
-                online: true,
-                messages: [],
-                lastMessage: '',
-                lastMessageTime: ''
-            }));
-        this.loadContacts();
     }
 
     formatDateTime(date) {
@@ -136,6 +77,7 @@ this.contacts = [
     }
 
     startTimeUpdate() {
+        // Update date time display every second
         setInterval(() => {
             const now = new Date();
             if (this.dateTimeDisplay) {
@@ -186,9 +128,9 @@ this.contacts = [
 
     loadContacts() {
         if (!this.contactsList) return;
-        
+
         this.contactsList.innerHTML = '';
-        
+
         this.contacts.forEach(contact => {
             const contactDiv = document.createElement('div');
             contactDiv.className = 'contact-item';
@@ -213,7 +155,7 @@ this.contacts = [
 
     selectContact(contact) {
         this.activeContact = contact;
-        
+
         document.querySelectorAll('.contact-item').forEach(item => {
             item.classList.remove('active');
         });
@@ -231,15 +173,15 @@ this.contacts = [
 
     loadMessages(contact) {
         if (!this.chatMessages) return;
-        
+
         this.chatMessages.innerHTML = '';
-        
+
         if (!contact.messages) contact.messages = [];
-        
+
         contact.messages.forEach(message => {
             this.addMessageToChat(message.content, message.type, message.timestamp);
         });
-        
+
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }
 
@@ -255,18 +197,20 @@ this.contacts = [
         const now = new Date();
         const timestamp = this.formatTimeShort(now);
 
-        // Send message through WebSocket
-        this.ws.send(JSON.stringify({
-            type: 'message',
-            to: this.activeContact.name,
-            content: message,
-            timestamp: timestamp
-        }));
+        // Send message to server
+        this.sendToServer({
+            type: 'chat_message',
+            recipient: this.activeContact.name,
+            encrypted_content: message // In a real app, you'd encrypt this
+        });
 
         // Add message to UI and storage
         this.addMessageToChat(message, 'sent', timestamp);
 
         // Store message
+        if (!this.activeContact.messages) {
+            this.activeContact.messages = [];
+        }
         this.activeContact.messages.push({
             content: message,
             type: 'sent',
@@ -284,22 +228,35 @@ this.contacts = [
         this.loadContacts();
     }
 
-    handleIncomingMessage(data) {
-        const contact = this.contacts.find(c => c.name === data.from);
+    handleIncomingMessage(message) {
+        const sender = message.from;
+        const content = message.content;
+        const timestamp = this.formatTimeShort(new Date());
+
+        // Find the contact
+        const contact = this.contacts.find(c => c.name === sender);
         if (contact) {
-            contact.messages.push({
-                content: data.content,
-                type: 'received',
-                timestamp: data.timestamp
-            });
-
-            contact.lastMessage = data.content;
-            contact.lastMessageTime = data.timestamp;
-
-            if (this.activeContact && this.activeContact.id === contact.id) {
-                this.addMessageToChat(data.content, 'received', data.timestamp);
+            if (!contact.messages) {
+                contact.messages = [];
             }
 
+            // Add message to contact's message history
+            contact.messages.push({
+                content: content,
+                type: 'received',
+                timestamp: timestamp
+            });
+
+            // Update last message
+            contact.lastMessage = content;
+            contact.lastMessageTime = timestamp;
+
+            // If this is the active contact, update the chat window
+            if (this.activeContact && this.activeContact.name === sender) {
+                this.addMessageToChat(content, 'received', timestamp);
+            }
+
+            // Reload contacts to update last message
             this.loadContacts();
         }
     }
@@ -307,63 +264,38 @@ this.contacts = [
     addMessageToChat(content, type, timestamp) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}`;
-        
+
         const messageContent = document.createElement('div');
         messageContent.className = 'message-content';
         messageContent.textContent = content;
-        
+
         const messageTime = document.createElement('div');
         messageTime.className = 'message-timestamp';
         messageTime.textContent = timestamp || this.formatTimeShort(new Date());
-        
+
         messageDiv.appendChild(messageContent);
         messageDiv.appendChild(messageTime);
         this.chatMessages.appendChild(messageDiv);
 
+        // Scroll to bottom
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-    }
-
-    addContact(username) {
-        if (!this.contacts.find(c => c.name === username) && username !== this.currentUser.username) {
-            this.contacts.push({
-                id: username,
-                name: username,
-                avatar: '../assets/images/default-avatar.png',
-                online: true,
-                messages: [],
-                lastMessage: '',
-                lastMessageTime: ''
-            });
-            this.loadContacts();
-        }
-    }
-
-    removeContact(username) {
-        const index = this.contacts.findIndex(c => c.name === username);
-        if (index !== -1) {
-            if (this.activeContact && this.activeContact.name === username) {
-                this.activeContact = null;
-                this.currentChatName.textContent = 'Select a contact';
-                this.currentChatAvatar.src = '../assets/images/default-avatar.png';
-                this.chatMessages.innerHTML = '';
-            }
-            this.contacts.splice(index, 1);
-            this.loadContacts();
-        }
     }
 
     filterContacts() {
         const searchTerm = this.searchInput.value.toLowerCase();
-        
+
+        // If search is empty, show all contacts
         if (!searchTerm) {
             this.loadContacts();
             return;
         }
 
-        const filteredContacts = this.contacts.filter(contact => 
+        // Filter contacts based on search term
+        const filteredContacts = this.contacts.filter(contact =>
             contact.name.toLowerCase().includes(searchTerm)
         );
-        
+
+        // Clear and rebuild contacts list
         this.contactsList.innerHTML = '';
         filteredContacts.forEach(contact => {
             const contactDiv = document.createElement('div');
@@ -403,12 +335,77 @@ this.contacts = [
     }
 
     logout() {
-        if (this.ws) {
-            this.ws.close();
-        }
         localStorage.removeItem('currentSession');
         window.location.href = 'login.html';
     }
+
+    async connectToServer() {
+        try {
+            this.ws = new WebSocket('ws://localhost:5555');
+
+            this.ws.onopen = () => {
+                console.log('Connected to server');
+                // Register user with server
+                this.sendToServer({
+                    type: 'register',
+                    username: this.currentUser.username,
+                    encryption_key: 'temporary-key' // You'll want to generate this properly
+                });
+            };
+
+            this.ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                this.handleServerMessage(message);
+            };
+
+            this.ws.onclose = () => {
+                console.log('Disconnected from server');
+                // Attempt to reconnect after 5 seconds
+                setTimeout(() => this.connectToServer(), 5000);
+            };
+        } catch (error) {
+            console.error('Failed to connect:', error);
+        }
+    }
+
+    handleServerMessage(message) {
+        switch (message.type) {
+            case 'user_list':
+                this.updateContactsList(message.users);
+                break;
+            case 'chat_message':
+                this.handleIncomingMessage(message);
+                break;
+            case 'register_response':
+                if (message.status === 'success') {
+                    console.log('Successfully registered with server');
+                }
+                break;
+        }
+    }
+
+    updateContactsList(users) {
+        // Filter out current user from the users list
+        this.contacts = users
+            .filter(user => user.username !== this.currentUser.username)
+            .map(user => ({
+                id: user.username, // Use username as ID
+                name: user.username,
+                avatar: '../assets/images/default-avatar.png',
+                online: true,
+                messages: [],
+                lastMessage: '',
+                lastMessageTime: ''
+            }));
+        this.loadContacts();
+    }
+
+    sendToServer(message) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(message));
+        }
+    }
+
 }
 
 // Initialize the chat app
