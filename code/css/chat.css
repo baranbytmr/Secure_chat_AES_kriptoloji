@@ -174,3 +174,7 @@
 .online-status.offline {
     background-color: #667781;
 }
+
+.logout-button:hover {
+    background-color: #c82333;
+}
