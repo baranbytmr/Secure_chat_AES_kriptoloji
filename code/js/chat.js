@@ -5,26 +5,27 @@ class ChatApp {
         }
 
         // Set current user and time
+        this.currentDateTime = new Date(); // Get current date/time
         this.currentUser = {
             username: 'Barcanito',
             avatar: '../assets/images/default-avatar.png',
-            loginTime: '2024-12-14 20:33:47'
+            loginTime: this.formatDateTime(this.currentDateTime)
         };
 
-        // Initialize contacts with messages
+        // Initialize contacts
         this.contacts = [
             {
                 id: 1,
                 name: 'John Doe',
                 avatar: '../assets/images/default-avatar1.png',
                 lastMessage: 'Hey, how are you?',
-                lastMessageTime: '20:10',
+                lastMessageTime: this.formatTimeShort(this.currentDateTime),
                 online: true,
                 messages: [
-                    { content: 'Hi Barcanito!', type: 'received', timestamp: '20:05' },
-                    { content: 'How are you doing?', type: 'received', timestamp: '20:06' },
-                    { content: "Hey John! I'm good, thanks!", type: 'sent', timestamp: '20:08' },
-                    { content: 'Hey, how are you?', type: 'received', timestamp: '20:10' }
+                    { content: 'Hi Barcanito!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: 'How are you doing?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: "Hey John! I'm good, thanks!", type: 'sent', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: 'Hey, how are you?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) }
                 ]
             },
             {
@@ -32,39 +33,13 @@ class ChatApp {
                 name: 'Jane Smith',
                 avatar: '../assets/images/default-avatar2.png',
                 lastMessage: 'See you tomorrow!',
-                lastMessageTime: '19:55',
+                lastMessageTime: this.formatTimeShort(this.currentDateTime),
                 online: true,
                 messages: [
-                    { content: 'Did you finish the project?', type: 'received', timestamp: '19:45' },
-                    { content: 'Yes, just submitted it', type: 'sent', timestamp: '19:50' },
-                    { content: 'Great work!', type: 'received', timestamp: '19:52' },
-                    { content: 'See you tomorrow!', type: 'received', timestamp: '19:55' }
-                ]
-            },
-            {
-                id: 3,
-                name: 'Mike Johnson',
-                avatar: '../assets/images/default-avatar3.png',
-                lastMessage: 'The meeting is at 3 PM',
-                lastMessageTime: '18:30',
-                online: false,
-                messages: [
-                    { content: 'When is the team meeting?', type: 'sent', timestamp: '18:25' },
-                    { content: 'The meeting is at 3 PM', type: 'received', timestamp: '18:30' }
-                ]
-            },
-            {
-                id: 4,
-                name: 'Sarah Wilson',
-                avatar: '../assets/images/default-avatar4.png',
-                lastMessage: 'Thanks for your help!',
-                lastMessageTime: '17:45',
-                online: false,
-                messages: [
-                    { content: 'Can you help me with the code?', type: 'received', timestamp: '17:30' },
-                    { content: 'Sure, what do you need?', type: 'sent', timestamp: '17:35' },
-                    { content: 'I fixed it now', type: 'received', timestamp: '17:40' },
-                    { content: 'Thanks for your help!', type: 'received', timestamp: '17:45' }
+                    { content: 'Did you finish the project?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: 'Yes, just submitted it', type: 'sent', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: 'Great work!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
+                    { content: 'See you tomorrow!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) }
                 ]
             }
         ];
@@ -74,7 +49,40 @@ class ChatApp {
         this.initializeListeners();
         this.loadUserInfo();
         this.loadContacts();
-        this.updateDateTime();
+        this.startTimeUpdate();
+    }
+
+    formatDateTime(date) {
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+    }
+
+    formatTimeShort(date) {
+        return date.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+    }
+
+    startTimeUpdate() {
+        // Update date time display every second
+        setInterval(() => {
+            const now = new Date();
+            if (this.dateTimeDisplay) {
+                this.dateTimeDisplay.textContent = `Current Date and Time (UTC): ${this.formatDateTime(now)}`;
+            }
+            if (this.loginInfoDisplay) {
+                this.loginInfoDisplay.textContent = `Current User's Login: ${this.currentUser.username}`;
+            }
+        }, 1000);
     }
 
     initializeElements() {
@@ -88,22 +96,7 @@ class ChatApp {
         this.currentChatName = document.getElementById('currentChatName');
         this.currentChatAvatar = document.getElementById('currentChatAvatar');
         this.dateTimeDisplay = document.getElementById('dateTime');
-    }
-
-    updateDateTime() {
-        if (this.dateTimeDisplay) {
-            const now = new Date('2024-12-14T20:33:47Z');
-            const options = {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                timeZone: 'UTC'
-            };
-            this.dateTimeDisplay.textContent = now.toLocaleString('en-US', options) + ' UTC';
-        }
+        this.loginInfoDisplay = document.getElementById('loginInfo');
     }
 
     initializeListeners() {
@@ -146,9 +139,9 @@ class ChatApp {
                 <img src="${contact.avatar}" alt="${contact.name}" class="avatar">
                 <div class="contact-info">
                     <div class="contact-name">${contact.name}</div>
-                    <div class="last-message">${contact.lastMessage}</div>
+                    <div class="last-message">${contact.lastMessage || ''}</div>
                 </div>
-                <div class="message-time">${contact.lastMessageTime}</div>
+                <div class="message-time">${contact.lastMessageTime || ''}</div>
             `;
 
             contactDiv.addEventListener('click', () => this.selectContact(contact));
@@ -159,13 +152,11 @@ class ChatApp {
     selectContact(contact) {
         this.activeContact = contact;
         
-        // Update UI
         document.querySelectorAll('.contact-item').forEach(item => {
             item.classList.remove('active');
         });
         event.currentTarget.classList.add('active');
 
-        // Update chat header
         if (this.currentChatName) {
             this.currentChatName.textContent = contact.name;
         }
@@ -173,7 +164,6 @@ class ChatApp {
             this.currentChatAvatar.src = contact.avatar;
         }
 
-        // Load messages
         this.loadMessages(contact);
     }
 
@@ -191,29 +181,6 @@ class ChatApp {
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }
 
-    addMessageToChat(content, type, timestamp) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}`;
-        
-        const messageContent = document.createElement('div');
-        messageContent.className = 'message-content';
-        messageContent.textContent = content;
-        
-        const messageTime = document.createElement('div');
-        messageTime.className = 'message-timestamp';
-        messageTime.textContent = timestamp || new Date('2024-12-14T20:33:47Z').toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        });
-        
-        messageDiv.appendChild(messageContent);
-        messageDiv.appendChild(messageTime);
-        this.chatMessages.appendChild(messageDiv);
-
-        // Scroll to bottom
-        this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-    }
-
     sendMessage() {
         if (!this.activeContact) {
             alert('Please select a contact first');
@@ -223,10 +190,8 @@ class ChatApp {
         const message = this.messageInput.value.trim();
         if (!message) return;
 
-        const timestamp = new Date('2024-12-14T20:33:47Z').toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        });
+        const now = new Date();
+        const timestamp = this.formatTimeShort(now);
 
         // Add message to UI and storage
         this.addMessageToChat(message, 'sent', timestamp);
@@ -247,6 +212,26 @@ class ChatApp {
         
         // Reload contacts to update last message
         this.loadContacts();
+    }
+
+    addMessageToChat(content, type, timestamp) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        messageContent.textContent = content;
+        
+        const messageTime = document.createElement('div');
+        messageTime.className = 'message-timestamp';
+        messageTime.textContent = timestamp || this.formatTimeShort(new Date());
+        
+        messageDiv.appendChild(messageContent);
+        messageDiv.appendChild(messageTime);
+        this.chatMessages.appendChild(messageDiv);
+
+        // Scroll to bottom
+        this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }
 
     filterContacts() {
@@ -277,9 +262,9 @@ class ChatApp {
                 <img src="${contact.avatar}" alt="${contact.name}" class="avatar">
                 <div class="contact-info">
                     <div class="contact-name">${contact.name}</div>
-                    <div class="last-message">${contact.lastMessage}</div>
+                    <div class="last-message">${contact.lastMessage || ''}</div>
                 </div>
-                <div class="message-time">${contact.lastMessageTime}</div>
+                <div class="message-time">${contact.lastMessageTime || ''}</div>
             `;
 
             contactDiv.addEventListener('click', () => this.selectContact(contact));
