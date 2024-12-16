@@ -60,6 +60,7 @@ class SecureChatServer:
     async def handle_message(self, websocket, message_data):
         """Handle incoming messages"""
         try:
+            print(f"Received message: {message_data}")
             message = json.loads(message_data)
             message_type = message.get("type", "")
 

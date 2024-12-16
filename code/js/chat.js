@@ -6,54 +6,51 @@ class ChatApp {
 
         // Set current user and time
         this.currentDateTime = new Date(); // Get current date/time
+
+        const sessionData = JSON.parse(localStorage.getItem('currentSession') || '{}');
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const currentUserData = users.find(u => u.username === sessionData.username);
+
+        // Set current user and time
+        this.currentDateTime = new Date();
         this.currentUser = {
-            username: 'Barcanito',
+            username: sessionData.username,
             avatar: '../assets/images/default-avatar.png',
-            loginTime: this.formatDateTime(this.currentDateTime)
+            loginTime: sessionData.loginTime || this.formatDateTime(this.currentDateTime),
+            // Store password hash for encryption (never store plain password)
+            passwordHash: currentUserData ? currentUserData.password : null
         };
 
         // Initialize contacts
-        this.contacts = [
-            {
-                id: 1,
-                name: 'John Doe',
-                avatar: '../assets/images/default-avatar1.png',
-                lastMessage: 'Hey, how are you?',
-                lastMessageTime: this.formatTimeShort(this.currentDateTime),
-                online: true,
-                messages: [
-                    { content: 'Hi Barcanito!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: 'How are you doing?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: "Hey John! I'm good, thanks!", type: 'sent', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: 'Hey, how are you?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) }
-                ]
-            },
-            {
-                id: 2,
-                name: 'Jane Smith',
-                avatar: '../assets/images/default-avatar2.png',
-                lastMessage: 'See you tomorrow!',
-                lastMessageTime: this.formatTimeShort(this.currentDateTime),
-                online: true,
-                messages: [
-                    { content: 'Did you finish the project?', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: 'Yes, just submitted it', type: 'sent', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: 'Great work!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) },
-                    { content: 'See you tomorrow!', type: 'received', timestamp: this.formatTimeShort(this.currentDateTime) }
-                ]
-            }
-        ];
-
-        // Initialize empty contacts list
         this.contacts = [];
+
         this.ws = null;
         this.connectToServer();
 
         this.activeContact = null;
         this.initializeElements();
         this.initializeListeners();
+        this.initializeEncryption();
         this.loadUserInfo();
         this.startTimeUpdate();
+    }
+
+    async initializeEncryption() {
+        if (!this.currentUser.passwordHash) {
+            console.error('No password hash available for encryption');
+            return;
+        }
+
+        // Use the user's password hash for encryption
+        const passwordKey = "your-secret-key"; // Use a secret key for encryption
+
+        // Generate a unique salt for this session
+        const salt = new Uint8Array(10).fill(1);
+        this.aes = new AES(passwordKey, salt);
+
+        // Generate a unique nonce for CTR mode
+        this.ctr = new CTR(this.aes, new Uint8Array(10).fill(0));
+        this.messageCounter = 0;
     }
 
     formatDateTime(date) {
@@ -185,7 +182,7 @@ class ChatApp {
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }
 
-    sendMessage() {
+    async sendMessage() {
         if (!this.activeContact) {
             alert('Please select a contact first');
             return;
@@ -197,67 +194,92 @@ class ChatApp {
         const now = new Date();
         const timestamp = this.formatTimeShort(now);
 
-        // Send message to server
-        this.sendToServer({
-            type: 'chat_message',
-            recipient: this.activeContact.name,
-            encrypted_content: message // In a real app, you'd encrypt this
-        });
+        try {
+            // Convert message to Uint8Array
+            const encoder = new TextEncoder();
+            const messageBytes = encoder.encode(message);
 
-        // Add message to UI and storage
-        this.addMessageToChat(message, 'sent', timestamp);
+            // Encrypt the message
+            const encryptedBytes = this.ctr.encrypt(messageBytes, this.messageCounter++);
+            const encryptedMessage = btoa(String.fromCharCode.apply(null, encryptedBytes));
 
-        // Store message
-        if (!this.activeContact.messages) {
-            this.activeContact.messages = [];
-        }
-        this.activeContact.messages.push({
-            content: message,
-            type: 'sent',
-            timestamp: timestamp
-        });
+            // Send encrypted message to server
+            this.sendToServer({
+                type: 'chat_message',
+                recipient: this.activeContact.name,
+                encrypted_content: encryptedMessage,
+                counter: this.messageCounter - 1 // Send counter for decryption
+            });
 
-        // Update last message
-        this.activeContact.lastMessage = message;
-        this.activeContact.lastMessageTime = timestamp;
+            // Add message to UI and storage
+            this.addMessageToChat(message, 'sent', timestamp);
 
-        // Clear input
-        this.messageInput.value = '';
-
-        // Reload contacts to update last message
-        this.loadContacts();
-    }
-
-    handleIncomingMessage(message) {
-        const sender = message.from;
-        const content = message.content;
-        const timestamp = this.formatTimeShort(new Date());
-
-        // Find the contact
-        const contact = this.contacts.find(c => c.name === sender);
-        if (contact) {
-            if (!contact.messages) {
-                contact.messages = [];
+            // Store message
+            if (!this.activeContact.messages) {
+                this.activeContact.messages = [];
             }
-
-            // Add message to contact's message history
-            contact.messages.push({
-                content: content,
-                type: 'received',
+            this.activeContact.messages.push({
+                content: message,
+                type: 'sent',
                 timestamp: timestamp
             });
 
             // Update last message
-            contact.lastMessage = content;
-            contact.lastMessageTime = timestamp;
+            this.activeContact.lastMessage = message;
+            this.activeContact.lastMessageTime = timestamp;
 
-            // If this is the active contact, update the chat window
-            if (this.activeContact && this.activeContact.name === sender) {
-                this.addMessageToChat(content, 'received', timestamp);
-            }
+            // Clear input
+            this.messageInput.value = '';
 
             // Reload contacts to update last message
             this.loadContacts();
+        } catch (error) {
+            console.error('Error sending encrypted message:', error);
+            alert('Failed to send encrypted message');
+        }
+    }
+
+    async handleIncomingMessage(message) {
+        try {
+            const sender = message.from;
+            const encryptedContent = message.content;
+            const counter = message.counter;
+
+            // Decrypt the message
+            const encryptedBytes = Uint8Array.from(atob(encryptedContent), c => c.charCodeAt(0));
+            const decryptedBytes = this.ctr.decrypt(encryptedBytes, counter);
+            const decryptedContent = new TextDecoder().decode(decryptedBytes);
+
+            const timestamp = this.formatTimeShort(new Date());
+
+            // Find the contact
+            const contact = this.contacts.find(c => c.name === sender);
+            if (contact) {
+                if (!contact.messages) {
+                    contact.messages = [];
+                }
+
+                // Add decrypted message to contact's message history
+                contact.messages.push({
+                    content: decryptedContent,
+                    type: 'received',
+                    timestamp: timestamp
+                });
+
+                // Update last message
+                contact.lastMessage = decryptedContent;
+                contact.lastMessageTime = timestamp;
+
+                // If this is the active contact, update the chat window
+                if (this.activeContact && this.activeContact.name === sender) {
+                    this.addMessageToChat(decryptedContent, 'received', timestamp);
+                }
+
+                // Reload contacts to update last message
+                this.loadContacts();
+            }
+        } catch (error) {
+            console.error('Error handling encrypted message:', error);
         }
     }
 
@@ -321,10 +343,21 @@ class ChatApp {
 
     checkAuth() {
         const session = JSON.parse(localStorage.getItem('currentSession') || '{}');
-        if (!session.isAuthenticated) {
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+
+        if (!session.isAuthenticated || !session.username) {
             window.location.href = 'login.html';
             return false;
         }
+
+        // Verify user exists in users list
+        const userExists = users.some(u => u.username === session.username);
+        if (!userExists) {
+            localStorage.removeItem('currentSession');
+            window.location.href = 'login.html';
+            return false;
+        }
+
         return true;
     }
 
@@ -345,11 +378,15 @@ class ChatApp {
 
             this.ws.onopen = () => {
                 console.log('Connected to server');
-                // Register user with server
+                // Register user with server using a derived key from password
+                const derivedKey = btoa(String.fromCharCode.apply(null,
+                    this.aes.encrypt(new TextEncoder().encode(this.currentUser.username))
+                ));
+
                 this.sendToServer({
                     type: 'register',
                     username: this.currentUser.username,
-                    encryption_key: 'temporary-key' // You'll want to generate this properly
+                    encryption_key: derivedKey
                 });
             };
 
