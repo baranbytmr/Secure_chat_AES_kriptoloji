@@ -95,7 +95,11 @@ class AES:
         # Split the keys for each round
         keys = np.split(keys, R)
 <<<<<<< HEAD
+<<<<<<< HEAD
         # Transpose arrays to match state shape (column-major order)
+=======
+        # Transpose arrays to match state shape (column-major order) and place in list of keys for each round
+>>>>>>> parent of cf52205 (pushla aq)
 =======
         # Transpose arrays to match state shape (column-major order) and place in list of keys for each round
 >>>>>>> parent of cf52205 (pushla aq)
