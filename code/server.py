@@ -1,11 +1,27 @@
 import socket
 import threading
 from datetime import datetime
+import openpyxl
 
-blocksize = 16
+# Initialize the Excel file
+def init_excel(file_name='encrypted_messages.xlsx'):
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Messages"
+    sheet.append(["Sender", "Encrypted Message", "Timestamp"])
+    workbook.save(file_name)
+
+# Function to store an encrypted message
+def store_message(sender, encrypted_message, file_name='encrypted_messages.xlsx'):
+    workbook = openpyxl.load_workbook(file_name)
+    sheet = workbook.active
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sheet.append([sender, encrypted_message, timestamp])
+    workbook.save(file_name)
+
 
 class SecureChatServer:
-    def __init__(self, host='0.0.0.0', port=5555):
+    def __init__(self, host='10.38.180.254', port=5555):
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind((host, port))
         self.clients = {}
@@ -14,6 +30,7 @@ class SecureChatServer:
     def log_message(self, message, message_type="INFO"):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"[{timestamp}] [{message_type}] {message}")
+        store_message("Server", message)
 
     def start(self):
         self.server.listen()
@@ -68,6 +85,7 @@ class SecureChatServer:
                 del self.keys[addr]
 
 if __name__ == "__main__":
+    init_excel()
     server = SecureChatServer()
     print("=== Secure Chat Server ===")
     print("Server is starting...")
